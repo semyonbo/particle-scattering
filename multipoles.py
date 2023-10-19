@@ -14,10 +14,12 @@ import yaml
 import os
 import matplotlib
 
+smuthi.utility.cuda.enable_gpu()
 
-os.environ["PATH"] += os.pathsep + '/Library/TeX/texbin'
+
+#os.environ["PATH"] += os.pathsep + '/Library/TeX/texbin'
 matplotlib.rcParams.update({'font.size': 30})
-plt.rcParams.update({"font.family":"sans-serif", "font.serif":"Computer Modern", "text.usetex":True})
+#plt.rcParams.update({"font.family":"sans-serif", "font.serif":"Computer Modern", "text.usetex":True})
 # plt.rcParams['text.usetex'] = True
 plt.rcParams["figure.figsize"] = [12.00, 9.00]
 plt.rcParams["figure.autolayout"] = True
@@ -123,11 +125,11 @@ def add_extinctions_to_output(wavelengths, extinctions, quadrupoles, radius):
     # plt.plot(wavelengths, z_component, color=color_for_twin_lines, label=z_description)
     # plt.plot(wavelengths, total, color='black', label='total')
     # plt.legend()
-    plt.plot(wavelengths, Q_ED, linestyle='dashed', color='red', label=r'\textrm{$Q_{ED}$}', lw=3)
-    plt.plot(wavelengths, Q_MD, linestyle='dashed', color='blue', label=r'\textrm{$Q_{MD}$}', lw=3)
-    plt.plot(wavelengths, Q_MQ, color='green', label=r'\textrm{$Q_{MQ}$}', lw=3)
-    plt.plot(wavelengths, Q_EQ, color='brown', label=r'\textrm{$Q_{EQ}$}', lw=3)
-    plt.plot(wavelengths, total, color='black', label=r'\textrm{$Q_{tot}$}', lw=3)
+    plt.plot(wavelengths, Q_ED, linestyle='dashed', color='red', label=r'$Q_{ED}$', lw=3)
+    plt.plot(wavelengths, Q_MD, linestyle='dashed', color='blue', label=r'$Q_{MD}$', lw=3)
+    plt.plot(wavelengths, Q_MQ, color='green', label=r'$Q_{MQ}$', lw=3)
+    plt.plot(wavelengths, Q_EQ, color='brown', label=r'$Q_{EQ}$', lw=3)
+    plt.plot(wavelengths, total, color='black', label=r'$Q_{tot}$', lw=3)
     plt.legend()
 
 
@@ -167,8 +169,8 @@ add_extinctions_to_output(wavelengths, extinctions_tm_gold, extinctions_tm_gold_
 plt.xlim([500, 1100])
 plt.ylim([-5,25])
 plt.grid()
-plt.xlabel(r'\textrm{$\lambda$, nm}')
-plt.ylabel(r'\textrm{$\sigma_{ext}$}')
+plt.xlabel(r'$\lambda$, nm')
+plt.ylabel(r'$\sigma_{ext}$')
 plt.savefig("Multipoles_SMUTHI.png", format="png", bbox_inches="tight")
 plt.show()
 
