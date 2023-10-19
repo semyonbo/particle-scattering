@@ -11,6 +11,8 @@ import smuthi.postprocessing.far_field as ff
 import smuthi.utility.optical_constants as opt
 import  smuthi.postprocessing.scattered_field as sc_f
 
+smuthi.utility.cuda.enable_gpu()
+
 
 wavelength = 660
 radius=96
@@ -53,10 +55,13 @@ simulation.run()
 #
 go.show_near_field(quantities_to_plot=['E_z'],
                    show_plots=True,
-                   show_opts=[
-                              {'interpolation':'bilinear'}],
+                   show_opts=[{'label': 'raw_data'},
+                              {'interpolation': 'quadric'},
+                              {'interpolation': 'quadric'}],
                    save_plots=True,
-                   save_opts=[{'format':'png'}], # animated gif of E_y
+                   save_opts=[{'format': 'png'},
+                              {'format': 'pdf', 'dpi': 200},
+                              {'format': 'gif'}],
                    outputdir='./output',
                    xmin=-1500,
                    xmax=1500,
