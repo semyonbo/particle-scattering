@@ -48,6 +48,10 @@ def get_extinctions(wavelength, sphere_refractive_index,
 
     # Since this moment we calculate extinction
     # Calculate total extinction
+
+    #scat_cs=ff.total_scattering_cross_section(initial_field=plane_wave,
+    #                                  particle_list=spheres_list,
+    #                                  layer_system=layers)
     general_ecs = ff.extinction_cross_section(initial_field=plane_wave,
                                               particle_list=spheres_list,
                                               layer_system=layers, only_pol=polarization)
@@ -124,3 +128,4 @@ plt.annotate(text="TM", xy=(0.5, 0.9), xycoords='figure fraction')
 add_extinctions_to_output(wavelengths, extinctions_tm_gold, ax_1, radius, 'red', 'blue')
 ax_1.set_ylim(ymin=-5, ymax=25)
 plt.show()
+f.savefig("sigma_ext_smuthi_multupoles.pdf", bbox_inches='tight')

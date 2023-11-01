@@ -11,11 +11,10 @@ import smuthi.postprocessing.far_field as ff
 import smuthi.utility.optical_constants as opt
 import  smuthi.postprocessing.scattered_field as sc_f
 
-smuthi.utility.cuda.enable_gpu()
 
 
-wavelength = 660
-radius=96
+wavelength = 600
+radius=129
 Au_thickness=300
 
 
@@ -26,7 +25,7 @@ spacer = 10  # nm
 
 layers = smuthi.layers.LayerSystem(thicknesses=[0,Au_thickness,0],
                                        refractive_indices=[1, index_Au[1] ,1])
-sphere = smuthi.particles.Sphere(position=[0, 0, radius + spacer + Au_thickness],
+sphere = smuthi.particles.Sphere(position=[0, 0, - radius - spacer],
                                  refractive_index=index_Si[1],
                                  radius=radius,
                                  l_max=3)
@@ -36,9 +35,11 @@ spheres_list = [sphere]
 
 # Initial field
 plane_wave = smuthi.initial_field.PlaneWave(vacuum_wavelength=wavelength,
-                                            polar_angle=(np.pi - 25*np.pi/180),  # 25 grad to the surface
+                                            polar_angle=( 25*np.pi/180),  # 25 grad to the surface
                                             azimuthal_angle=0,
-                                            polarization=1)  # 0=TE 1=TM
+                                            polarization=1,
+                                            amplitude=10)  # 0=TE 1=TM
+
 
 # Initialize and run simulation
 simulation = smuthi.simulation.Simulation(layer_system=layers,
@@ -52,24 +53,33 @@ simulation = smuthi.simulation.Simulation(layer_system=layers,
 simulation.run()
 
 
-#
-go.show_near_field(quantities_to_plot=['E_z'],
-                   show_plots=True,
-                   show_opts=[{'label': 'raw_data'},
-                              {'interpolation': 'quadric'},
-                              {'interpolation': 'quadric'}],
-                   save_plots=True,
-                   save_opts=[{'format': 'png'},
-                              {'format': 'pdf', 'dpi': 200},
-                              {'format': 'gif'}],
-                   outputdir='./output',
-                   xmin=-1500,
-                   xmax=1500,
-                   ymax=1500,
-                   ymin=-1500,
-                   zmin=Au_thickness,
-                   zmax=Au_thickness,
-                   resolution_step=50,
-                   simulation=simulation,
-                   show_internal_field=True)
+# go.show_near_field(quantities_to_plot=['norm(E_scat)'],
+#                    show_plots=True,
+#                    show_opts=[{'label': 'raw_data'},
+#                               {'interpolation': 'quadric'}],
+#                    save_plots=True,
+#                    save_opts=[{'format': 'png'}],
+#                    outputdir='./output',
+#                    xmin=-1500,
+#                    xmax=1500,
+#                    ymax=1500,
+#                    ymin=-1500,
+#                    resolution_step=50,
+#                    simulation=simulation,
+#                    show_internal_field=True)
+
+
+smuthi.postprocessing.graphical_output.show_scattering_cross_section(simulation=simulation,
+                                                                     show_plots=True,
+                                                                     show_opts=[{'label': 'scattering_cross_section'}],
+                                                                     save_plots=False,
+                                                                     save_opts=None,
+                                                                     save_data=False,
+                                                                     data_format='hdf5',
+                                                                     outputdir='.',
+                                                                     flip_downward=True,
+                                                                     split=True,
+                                                                     log_scale=False,
+                                                                     polar_angles='default',
+                                                                     azimuthal_angles='default')
 

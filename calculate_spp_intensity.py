@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import unittest
 import numpy as np
 import smuthi
 import smuthi.simulation
@@ -8,15 +7,13 @@ import smuthi.layers
 import smuthi.particles
 import smuthi.postprocessing.far_field as ff
 import smuthi.utility.optical_constants as opt
-import io
-import yaml
-import csv
+import scipy.integrate as integrate
+import smuthi.postprocessing.graphical_output as go
 
-#smuthi.utility.cuda.enable_gpu()
 
 # for single wavelength
 def get_extinctions(wavelength, sphere_refractive_index,
-                    layers_thicknesses, layers_refractive_indeces, polarization, radius):
+                    layers_thicknesses, layers_refractive_indeces, polarization, radius, amplitude):
     spacer = 10  # nm
 
     layers = smuthi.layers.LayerSystem(thicknesses=layers_thicknesses,
@@ -35,7 +32,8 @@ def get_extinctions(wavelength, sphere_refractive_index,
     plane_wave = smuthi.initial_field.PlaneWave(vacuum_wavelength=wavelength,
                                                 polar_angle=(np.pi - 25 * np.pi / 180),  # 25 grad to the surface
                                                 azimuthal_angle=0,
-                                                polarization=polarization)  # 0=TE 1=TM
+                                                polarization=polarization,
+                                                amplitude=amplitude)  # 0=TE 1=TM
 
     # Initialize and run simulation
     simulation = smuthi.simulation.Simulation(layer_system=layers,
@@ -48,13 +46,10 @@ def get_extinctions(wavelength, sphere_refractive_index,
                                               coupling_matrix_interpolator_kind='cubic')
     simulation.run()
 
-    # Since this moment we calculate extinction
-    # Calculate total extinction of dipole (another multipoles are cut by only_l=1)
-    general_ecs = ff.extinction_cross_section(initial_field=plane_wave,
-                                              particle_list=spheres_list,
-                                              layer_system=layers, only_pol=polarization)
 
-    extinctions = [[], [], []]
+
+
+    extinctions = [[], []]
     # extinctions[0] -- magnetic projections,
     # extinctions[1] -- electric projections
     # extinctions[2] -- total extinction
@@ -65,45 +60,74 @@ def get_extinctions(wavelength, sphere_refractive_index,
                                                                 layer_system=layers, only_l=1, only_pol=polarization,
                                                                 only_tau=tau, only_m=m)
             extinctions[tau].append(calculated_extinction)
-    extinctions[2].append(general_ecs)
-
     return extinctions
 
-def add_extinctions_to_output(wavelengths, extinctions, subplot, radius, tau,
-                              color_for_single_line, color_for_twin_lines,
-                              x_description, y_description, z_description):
-    x_component = np.zeros(len(extinctions))
-    z_component = np.zeros(len(extinctions))
-    y_component = np.zeros(len(extinctions))
-    total = np.zeros(len(extinctions))
+
+def add_extinctions_to_output(wavelengths, extinctions_te, extinctions_tm, te_amplitude, tm_amplitude, radius):
+    px = np.zeros(len(wavelengths),dtype = 'complex_')
+    py = np.zeros(len(wavelengths),dtype = 'complex_')
+    pz = np.zeros(len(wavelengths),dtype = 'complex_')
+    mx = np.zeros(len(wavelengths),dtype = 'complex_')
+    my = np.zeros(len(wavelengths),dtype = 'complex_')
+    mz = np.zeros(len(wavelengths),dtype = 'complex_')
+
 
     # Here we convert extinction from spherical to cartesian projection.
-    for i in range(len(extinctions)):
+    for i in range(len(wavelengths)):
         # extinctions[i][j][k], where [i] responses for wavelength,
         # [j] responses for magnetic/electric component (0 -- magnetic, 1 -- electric, 2 -- total),
         # [k] responses for projection ([-1, 0, 1] in our case)
-        x_component[i] = (extinctions[i][tau][0] + extinctions[i][tau][2]).real / np.pi / radius ** 2
 
-        y_component[i] = (extinctions[i][1 - tau][0] + extinctions[i][1 - tau][2]).real / np.pi / radius ** 2
+        mx[i] = np.sqrt((extinctions_te[i][0][0] + extinctions_te[i][0][2]).real/np.pi/radius**2) * te_amplitude
 
-        z_component[i] = (extinctions[i][tau][1]).real / np.pi / radius ** 2
+        if np.isnan(mx[i]):
+            mx[i]=0
 
-        total[i] = (extinctions[i][2][0]).real / np.pi / radius ** 2
+        py[i] = np.sqrt((extinctions_te[i][1][0] + extinctions_te[i][1][2]).real/np.pi/radius**2) * te_amplitude
 
-    subplot.plot(wavelengths, x_component, linestyle='dashed', color=color_for_twin_lines,
-                 label=x_description)
-    subplot.plot(wavelengths, y_component, linestyle='dashed', color=color_for_single_line,
-                 label=y_description)
-    subplot.plot(wavelengths, z_component, color=color_for_twin_lines,
-                 label=z_description)
-    subplot.plot(wavelengths, total, color='black', label='$\sigma_{tot}$')
-    subplot.legend()
+        if np.isnan(py[i]):
+            py[i]=0
+
+        mz[i] = np.sqrt((extinctions_te[i][0][1]).real/np.pi/radius**2) * te_amplitude
+
+        if np.isnan(mz[i]):
+            mz[i]=0
+
+        px[i] = np.sqrt((extinctions_tm[i][1][0] + extinctions_tm[i][1][2]).real/np.pi/radius**2) * np.abs(tm_amplitude)
+
+        if np.isnan(px[i]):
+            px[i]=0
+
+        my[i] = np.sqrt((extinctions_tm[i][0][0] + extinctions_tm[i][0][2]).real/np.pi/radius**2) * np.abs(tm_amplitude)
+
+        if np.isnan(my[i]):
+            my[i]=0
+
+        pz[i] = np.sqrt((extinctions_tm[i][1][1]).real/np.pi/radius**2) * np.abs(tm_amplitude)
+
+        if np.isnan(pz[i]):
+            pz[i]=0
+
+    return px, py, pz, mx, my, mz
 
 
-wavelength_min = 500
-wavelength_max = 1100
-total_points = 300
-wavelengths = np.linspace(wavelength_min, wavelength_max, total_points)
+def spp_intensity(px,py,pz,mx,my,angle, index_media):
+
+    eps=index_media**2
+    kappa=-1j*np.sqrt(1/(eps+1))
+    k_spp=np.sqrt(eps/(eps+1))
+    intens = np.abs((mx+1j*kappa*py)*np.sin(angle) + (my - 1j * kappa * px) * np.cos(angle)-k_spp*pz)**2
+    return intens
+
+
+# wavelength_min = 500
+# wavelength_max = 1100
+# total_points = 300
+# wavelengths = np.linspace(wavelength_min, wavelength_max, total_points)
+
+wavelengths=[640, 810]
+
+print(wavelengths[0])
 
 index_Si = opt.read_refractive_index_from_yaml('Si_Green-2008.yml', wavelengths, units="nm")
 index_Au = opt.read_refractive_index_from_yaml('Au_refractive_index.yml', wavelengths, units="nm")
@@ -115,43 +139,49 @@ Au_thickness = 300
 extinctions_te_gold = []
 extinctions_tm_gold = []
 
+total_amplitude=1
+ellipticity=0.25
+PhaseAngle=-np.pi/2
+te_amplitude=ellipticity*total_amplitude
+
+tm_amplitude=np.sqrt(1-ellipticity**2)*total_amplitude*np.exp(1j*PhaseAngle)
+
+
 for i in range(len(wavelengths)):
     # With gold, TE polarization
     decomposed_te_gold_extinction = get_extinctions(wavelengths[i], index_Si[i][1],
                                                     [0, Au_thickness, 0], [index_media, index_Au[i][1], index_media], 0,
-                                                    radius)
+                                                    radius, te_amplitude)
 
     # With gold, TM polarization
     decomposed_tm_gold_extinction = get_extinctions(wavelengths[i], index_Si[i][1],
                                                     [0, Au_thickness, 0], [index_media, index_Au[i][1], index_media], 1,
-                                                    radius)
+                                                    radius, tm_amplitude)
 
     extinctions_te_gold.append(decomposed_te_gold_extinction)
     extinctions_tm_gold.append(decomposed_tm_gold_extinction)
 
-# Since this moment we just output the calculated extinction decompositions.
-f, (ax_1, ax_2) = plt.subplots(2, 1, sharex=True)
-plt.annotate(text="TM", xy=(0, 0.25), xycoords='figure fraction')
-plt.annotate(text="TE", xy=(0, 0.75), xycoords='figure fraction')
 
 # Now we use tau=0 for TE-polarization and tau=1 for TM,
-# because it defines which component (magnetic or electric) we will use in plotting x and z axis,
-# and which component -- for y axis.
 
-add_extinctions_to_output(wavelengths, extinctions_te_gold, ax_1, radius, 0, 'red', 'blue',
-                          '$\sigma_{m_x}$', '$\sigma_{p_y}$', '$\sigma_{m_z}$')
-add_extinctions_to_output(wavelengths, extinctions_tm_gold, ax_2, radius, 1, 'blue', 'red',
-                          '$\sigma_{p_x}$', '$\sigma_{m_y}$', '$\sigma_{p_z}$')
+dipoles = add_extinctions_to_output(wavelengths, extinctions_te_gold, extinctions_tm_gold, te_amplitude, tm_amplitude, radius)
 
-ax_1.set_ylim(ymin=-5, ymax=25)
-ax_2.set_ylim(ymin=-5, ymax=25)
+numb=0
+angles = np.linspace(0,2*np.pi, 300)
+intensity=[]
 
+I_spp_tot = integrate.quad(lambda angle: spp_intensity(dipoles[0][numb], dipoles[1][numb], dipoles[2][numb], dipoles[3][numb], dipoles[4][numb], angle, index_Au[numb][1]), 0, 2*np.pi)[0]
+
+for i in angles:
+    intensity.append(2*np.pi*spp_intensity(dipoles[0][numb], dipoles[1][numb], dipoles[2][numb], dipoles[3][numb], dipoles[4][numb], i, index_Au[numb][1])/I_spp_tot)
+
+
+fig, ax_polar = plt.subplots(subplot_kw={'projection': 'polar'})
+ax_polar.plot(angles, intensity)
+#ax_polar.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
+ax_polar.grid(True)
+ax_polar.set_rmax(3)
 plt.show()
-
-f.savefig("sigma_ext_smuthi_dipoles.pdf", bbox_inches='tight')
-# You can compare the output results with the same calculation in paper
-# "Laser Photonics Rev.10,No. 5, 799–806 (2016)/DOI10.1002/lpor.201600055"
-# (graphics in page 803)
 
 
 
